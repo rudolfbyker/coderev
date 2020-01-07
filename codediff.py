@@ -85,7 +85,7 @@ def get_lines(file):
 
 def write_file(file, content):
     with open(file, 'w') as f:
-        f.write(content.encode('utf-8'))
+        f.write(content)
 
 
 def sdiff_lines(from_lines, to_lines, from_title, to_title, use_context, wrap_num, context_line):
