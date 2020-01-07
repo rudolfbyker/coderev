@@ -597,9 +597,14 @@ class CodeDiffer:
             if stat1 and not stat2:  # deleted
                 print('  * {:<40} |'.format(f), end=' ')
                 print('File removed', end=' ')
-                # st_mtime = time.localtime(stat1[8])
-                if not stat.S_ISREG(stat1[0]) or is_binary_file(obj1):
-                    print('(skipped dir/special/binary)')
+                if stat.S_ISDIR(stat1[0]):
+                    print('(skipped dir)')
+                    continue
+                if not stat.S_ISREG(stat1[0]):
+                    print('(skipped special)')
+                    continue
+                if is_binary_file(obj1):
+                    print('(skipped binary)')
                     continue
                 print()
                 write_file(target + '-.html', convert_to_html(obj1))
@@ -610,8 +615,14 @@ class CodeDiffer:
             elif not stat1 and stat2:  # added
                 print('  * {:<40} |'.format(f), end=' ')
                 print('New file', end=' ')
-                if not stat.S_ISREG(stat2[0]) or is_binary_file(obj2):
-                    print('(skipped special/binary)')
+                if stat.S_ISDIR(stat2[0]):
+                    print('(skipped dir)')
+                    continue
+                if not stat.S_ISREG(stat2[0]):
+                    print('(skipped special)')
+                    continue
+                if is_binary_file(obj2):
+                    print('(skipped binary)')
                     continue
                 print()
                 write_file(target + '.html', convert_to_html(obj2))
@@ -621,16 +632,13 @@ class CodeDiffer:
 
             elif stat1 and stat2:  # same or diff
                 # do not compare special or binary file
-                if not stat.S_ISREG(stat1[0]) or is_binary_file(obj1):
+                if not stat.S_ISREG(stat1[0]) or is_binary_file(obj1) or not stat.S_ISREG(stat2[0]) or is_binary_file(obj2):
                     print('  * {:<40} |'.format(f), end=' ')
-                    print('(skipped, former file is special)')
-                    continue
-                if not stat.S_ISREG(stat2[0]) or is_binary_file(obj2):
-                    print('  * {:<40} |'.format(f), end=' ')
-                    print('(skipped, latter file is binary)')
+                    print('(skipped, dir/special/binary)')
                     continue
                 if not self.__show_common_files:
                     if filecmp.cmp(obj1, obj2):
+                        # Files are the same.
                         continue
 
                 has_diff = True
