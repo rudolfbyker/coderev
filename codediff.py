@@ -147,7 +147,22 @@ def is_binary_file(file):
 
     See http://stackoverflow.com/questions/898669/how-can-i-detect-if-a-file-is-binary-non-text-in-python
     """
-    return 'text' not in magic.from_file(file, mime=True)
+    try:
+        return 'text' not in magic.from_file(file, mime=True)
+    except FileNotFoundError:
+        return None
+
+
+def is_text_file(file):
+    """
+    Check whether a file is a plain text file or not.
+
+    See http://stackoverflow.com/questions/898669/how-can-i-detect-if-a-file-is-binary-non-text-in-python
+    """
+    try:
+        return 'text' in magic.from_file(file, mime=True)
+    except FileNotFoundError:
+        return None
 
 
 def cdiff_to_html(cdiff, title):
@@ -476,7 +491,7 @@ class CodeDiffer:
 
     def __init__(self, obj1, obj2, output, input_list=None, strip_level=0,
                  wrap_num=0, context_line=3, title='', pager=1000,
-                 comments='', show_common_files=False):
+                 comments='', show_common_files=False, include_binary_files=False):
         self.__obj1 = obj1
         self.__obj2 = obj2
         self.__output = output
@@ -489,6 +504,7 @@ class CodeDiffer:
         self.__comments = comments
         self.__pager = Pager(pager)
         self.__show_common_files = show_common_files
+        self.__include_binary_files = include_binary_files
         # TODO: provide options
         self.__dir_ignore_list = _global_dir_ignore_list
         self.__file_ignore_list = _global_file_ignore_list
@@ -561,21 +577,13 @@ class CodeDiffer:
         print("total {} files to check".format(len(self.__file_list)))
 
     def __diff_dir_by_list(self):
-        data_row = ''
         summary = {'changed': 0, 'added': 0, 'deleted': 0}
-        file_summary = {'changed': 0, 'added': 0, 'deleted': 0}
         has_diff = False
 
         self.__file_list.sort()
 
         for f in self.__file_list:
             f_url = urllib.parse.quote(f)
-            # set default values
-            from_lines = ''
-            to_lines = ''
-            from_date = ''
-            to_date = ''
-
             target = os.path.join(self.__output, f)
             obj1 = os.path.join(self.__obj1, f)
             obj2 = os.path.join(self.__obj2, f)
@@ -587,27 +595,42 @@ class CodeDiffer:
                 if error.errno != errno.EEXIST:
                     raise CodeDifferError('OSError: ' + str(error))
 
+            file1_is_binary = is_binary_file(obj1)
+            file2_is_binary = is_binary_file(obj2)
+            file1_is_text = is_text_file(obj1)
+            file2_is_text = is_text_file(obj2)
+
+            file1_is_dir = None
+            file2_is_dir = None
+            file1_is_regular = None
+            file2_is_regular = None
+
             stat1 = None
             stat2 = None
             if os.path.exists(obj1):
                 stat1 = os.lstat(obj1)
+                file1_is_dir = stat.S_ISDIR(stat1[0])
+                file1_is_regular = stat.S_ISREG(stat1[0])
             if os.path.exists(obj2):
                 stat2 = os.lstat(obj2)
+                file2_is_dir = stat.S_ISDIR(stat2[0])
+                file2_is_regular = stat.S_ISREG(stat2[0])
 
             if stat1 and not stat2:  # deleted
                 print('  * {:<40} |'.format(f), end=' ')
                 print('File removed', end=' ')
-                if stat.S_ISDIR(stat1[0]):
+                if file1_is_dir:
                     print('(skipped dir)')
                     continue
-                if not stat.S_ISREG(stat1[0]):
+                if not file1_is_regular:
                     print('(skipped special)')
                     continue
-                if is_binary_file(obj1):
+                if file1_is_binary and not self.__include_binary_files:
                     print('(skipped binary)')
                     continue
                 print()
-                write_file(target + '-.html', convert_to_html(obj1))
+                if file1_is_text:
+                    write_file(target + '-.html', convert_to_html(obj1))
                 data_row = self._deleted_data_row_template % {'pathname': f, 'pathname_url': f_url}
                 summary['deleted'] += 1
                 has_diff = True
@@ -615,26 +638,34 @@ class CodeDiffer:
             elif not stat1 and stat2:  # added
                 print('  * {:<40} |'.format(f), end=' ')
                 print('New file', end=' ')
-                if stat.S_ISDIR(stat2[0]):
+                if file2_is_dir:
                     print('(skipped dir)')
                     continue
-                if not stat.S_ISREG(stat2[0]):
+                if not file2_is_regular:
                     print('(skipped special)')
                     continue
-                if is_binary_file(obj2):
+                if file2_is_binary and not self.__include_binary_files:
                     print('(skipped binary)')
                     continue
                 print()
-                write_file(target + '.html', convert_to_html(obj2))
+                if file2_is_text:
+                    write_file(target + '.html', convert_to_html(obj2))
                 data_row = self._added_data_row_template % {'pathname': f, 'pathname_url': f_url}
                 summary['added'] += 1
                 has_diff = True
 
             elif stat1 and stat2:  # same or diff
-                # do not compare special or binary file
-                if not stat.S_ISREG(stat1[0]) or is_binary_file(obj1) or not stat.S_ISREG(stat2[0]) or is_binary_file(obj2):
+                if (file1_is_binary or file2_is_binary) and not self.__include_binary_files:
                     print('  * {:<40} |'.format(f), end=' ')
-                    print('(skipped, dir/special/binary)')
+                    print('(skipped binary)')
+                    continue
+                if file1_is_dir or file2_is_dir:
+                    print('  * {:<40} |'.format(f), end=' ')
+                    print('(skipped dir)')
+                    continue
+                if not file1_is_regular or not file2_is_regular:
+                    print('  * {:<40} |'.format(f), end=' ')
+                    print('(skipped special)')
                     continue
                 if not self.__show_common_files:
                     if filecmp.cmp(obj1, obj2):
@@ -674,8 +705,10 @@ class CodeDiffer:
                     file_summary['added'])
                 )
 
-                write_file(target + '-.html', convert_to_html(obj1))
-                write_file(target + '.html', convert_to_html(obj2))
+                if file1_is_text:
+                    write_file(target + '-.html', convert_to_html(obj1))
+                if file2_is_text:
+                    write_file(target + '.html', convert_to_html(obj2))
                 if file_summary['changed'] == \
                         file_summary['deleted'] == \
                         file_summary['added'] == 0:
@@ -690,7 +723,7 @@ class CodeDiffer:
                     added=file_summary['added'],
                 )
                 summary['changed'] += 1
-            else:  # this case occured when controlled by master file list
+            else:  # this case occurred when controlled by master file list
                 print('  * {:<40} |'.format(f), end=' ')
                 print('Not found')
                 data_row = ''
@@ -842,6 +875,14 @@ if __name__ == '__main__':
         help='do not prompt for overwriting'
     )
     parser.add_option(
+        '-b',
+        '--include-binary',
+        action='store_true',
+        dest='include_binary',
+        default=False,
+        help="also process binary (non-text) files (they are ignored by default)"
+    )
+    parser.add_option(
         '-P',
         '--pager',
         dest='pager',
@@ -885,9 +926,20 @@ if __name__ == '__main__':
                 sys.exit(1)
 
     try:
-        differ = CodeDiffer(args[0], args[1], opts.output, opts.filelist,
-                            opts.striplevel, opts.wrapnum, opts.lines,
-                            opts.title, opts.pager, comments)
+        differ = CodeDiffer(
+            obj1=args[0],
+            obj2=args[1],
+            output=opts.output,
+            input_list=opts.filelist,
+            strip_level=opts.striplevel,
+            wrap_num=opts.wrapnum,
+            context_line=opts.lines,
+            title=opts.title,
+            pager=opts.pager,
+            comments=comments,
+            show_common_files=False,
+            include_binary_files=opts.include_binary,
+        )
         differ.make_diff()
     except CodeDifferError as e:
         sys.stderr.write(str(e) + '\n')
