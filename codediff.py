@@ -33,6 +33,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import magic
 
 _self_name = 'coderev'
 
@@ -52,12 +53,6 @@ _global_file_ignore_list = (
     r'.*~$',
     r'^\.cvsignore$',
 )
-
-text_characters = ''.join(map(chr, [7, 8, 9, 10, 12, 13, 27] + list(range(0x20, 0x100))))
-
-
-def is_binary_string(s):
-    return bool(s.translate(None, text_characters))
 
 
 def make_title(pathname, width):
@@ -148,10 +143,11 @@ def convert_to_html(src):
 
 def is_binary_file(file):
     """
-    Determine a binary file
-    see http://stackoverflow.com/questions/898669/how-can-i-detect-if-a-file-is-binary-non-text-in-python
+    Check whether a file is a binary file or not. If it's not a plain text file, it's considered binary.
+
+    See http://stackoverflow.com/questions/898669/how-can-i-detect-if-a-file-is-binary-non-text-in-python
     """
-    return is_binary_string(open(file).read(2014))
+    return 'text' not in magic.from_file(file, mime=True)
 
 
 def cdiff_to_html(cdiff, title):

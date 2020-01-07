@@ -20,6 +20,11 @@ This toolkit contains two scripts that can be used separately.
 This project was originally hosted at [google code](http://code.google.com/p/coderev/)
 and recent moved to github.
 
+## Requiements
+
+- Python 3
+- `python-magic`
+
 ## Usage of coderev.sh
 
 Just type `./coderev.sh -h` to see the usage.
