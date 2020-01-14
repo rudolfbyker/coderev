@@ -35,7 +35,7 @@ import urllib.parse
 import urllib.request
 import magic
 
-_self_name = 'coderev'
+_self_name = 'codediff'
 
 _global_dir_ignore_list = (
     r'^CVS$',
