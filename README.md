@@ -20,7 +20,7 @@ This toolkit contains two scripts that can be used separately.
 This project was originally hosted at [google code](http://code.google.com/p/coderev/)
 and recent moved to github.
 
-## Requiements
+## Requirements
 
 - Python 3
 - `python-magic`
