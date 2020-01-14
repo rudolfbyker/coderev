@@ -270,7 +270,6 @@ def strip_prefix(name, p=0):
     tail = len(name) - 1
     while p > 0:
         index = name.find('/', cur)
-        # print 'p:', p, 'cur:', cur, 'index:', index
         if index == -1:
             break
         while index <= tail and name[index] == '/':
@@ -575,7 +574,6 @@ class CodeDiffer:
             a = self.__grab_dir(self.__obj1)
             b = self.__grab_dir(self.__obj2)
             self.__file_list = list(set(a) | set(b))
-        print("total {} files to check".format(len(self.__file_list)))
 
     def __diff_dir_by_list(self):
         summary = {'changed': 0, 'added': 0, 'deleted': 0}
@@ -617,61 +615,57 @@ class CodeDiffer:
                 file2_is_dir = stat.S_ISDIR(stat2[0])
                 file2_is_regular = stat.S_ISREG(stat2[0])
 
-            if stat1 and not stat2:  # deleted
-                print('  * {:<40} |'.format(f), end=' ')
-                print('File removed', end=' ')
+            if stat1 and not stat2:
+                # File deleted
                 if file1_is_dir:
-                    print('(skipped dir)')
+                    # Skip directory
                     continue
                 if not file1_is_regular:
-                    print('(skipped special)')
+                    # Skip special file
                     continue
                 if file1_is_binary and not self.__include_binary_files:
-                    print('(skipped binary)')
+                    # Skip binary file
                     continue
-                print()
                 if file1_is_text:
                     write_file(target + '-.html', convert_to_html(obj1))
                 data_row = self._deleted_data_row_template % {'pathname': f, 'pathname_url': f_url}
                 summary['deleted'] += 1
                 has_diff = True
 
-            elif not stat1 and stat2:  # added
-                print('  * {:<40} |'.format(f), end=' ')
-                print('New file', end=' ')
+            elif not stat1 and stat2:
+                # File added
                 if file2_is_dir:
-                    print('(skipped dir)')
+                    # Skip directory
                     continue
                 if not file2_is_regular:
-                    print('(skipped special)')
+                    # Skip special file
                     continue
                 if file2_is_binary and not self.__include_binary_files:
-                    print('(skipped binary)')
+                    # Skip binary file
                     continue
-                print()
                 if file2_is_text:
                     write_file(target + '.html', convert_to_html(obj2))
                 data_row = self._added_data_row_template % {'pathname': f, 'pathname_url': f_url}
                 summary['added'] += 1
                 has_diff = True
 
-            elif stat1 and stat2:  # same or diff
+            elif stat1 and stat2:
+                # File exists on both sides.
                 if (file1_is_binary or file2_is_binary) and not self.__include_binary_files:
-                    print('  * {:<40} |'.format(f), end=' ')
-                    print('(skipped binary)')
+                    # Skip binary file
                     continue
                 if file1_is_dir or file2_is_dir:
-                    print('  * {:<40} |'.format(f), end=' ')
-                    print('(skipped dir)')
+                    # Skip directory
                     continue
                 if not file1_is_regular or not file2_is_regular:
-                    print('  * {:<40} |'.format(f), end=' ')
-                    print('(skipped special)')
+                    # Skip special file
                     continue
                 if not self.__show_common_files:
                     if filecmp.cmp(obj1, obj2):
                         # Files are the same.
                         continue
+
+                # Files are different.
 
                 has_diff = True
                 from_date = time.ctime(stat1[8])
@@ -699,13 +693,6 @@ class CodeDiffer:
                                    self.__wrap_num, self.__context_line)
                 write_file(target + '.fdiff.html', html)
 
-                print('  * {:<40} |'.format(f), end=' ')
-                print('Changed/Deleted/Added: {:d}/{:d}/{:d}'.format(
-                    file_summary['changed'],
-                    file_summary['deleted'],
-                    file_summary['added'])
-                )
-
                 if file1_is_text:
                     write_file(target + '-.html', convert_to_html(obj1))
                 if file2_is_text:
@@ -724,9 +711,9 @@ class CodeDiffer:
                     added=file_summary['added'],
                 )
                 summary['changed'] += 1
-            else:  # this case occurred when controlled by master file list
-                print('  * {:<40} |'.format(f), end=' ')
-                print('Not found')
+            else:
+                # File does not exist on either side.
+                # This case occurred when controlled by master file list.
                 data_row = ''
             self.__pager.add(data_row)
 
