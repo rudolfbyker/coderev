@@ -34,6 +34,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import magic
+from tqdm import tqdm
 
 _self_name = 'codediff'
 
@@ -486,7 +487,8 @@ class CodeDiffer:
             show_common_files=False,
             include_binary_files=False,
             dir_ignore_list=None,
-            file_ignore_list=None
+            file_ignore_list=None,
+            show_progress_bar=False,
     ):
         if file_ignore_list is None:
             file_ignore_list = []
@@ -508,6 +510,7 @@ class CodeDiffer:
         self.__include_binary_files = include_binary_files
         self.__dir_ignore_list = set(dir_ignore_list)
         self.__file_ignore_list = set(file_ignore_list)
+        self.__show_progress_bar = show_progress_bar
 
     def __diff_file(self):
         """
@@ -545,7 +548,10 @@ class CodeDiffer:
         prefix = directory + '/'  # os.path.sep
         plen = len(prefix)
 
-        for root, dirs, files in os.walk(directory):
+        iterator = os.walk(directory)
+        if self.__show_progress_bar:
+            iterator = tqdm(iterable=iterator, desc="Getting list of files and directories")
+        for root, dirs, files in iterator:
             for d in [k for k in dirs]:
                 if self.__is_ignore_dir(d):
                     dirs.remove(d)
@@ -581,7 +587,10 @@ class CodeDiffer:
 
         self.__file_list.sort()
 
-        for f in self.__file_list:
+        iterator = self.__file_list
+        if self.__show_progress_bar:
+            iterator = tqdm(iterable=iterator, desc="Calculating differences")
+        for f in iterator:
             f_url = urllib.parse.quote(f)
             target = os.path.join(self.__output, f)
             obj1 = os.path.join(self.__obj1, f)
@@ -745,7 +754,10 @@ class CodeDiffer:
 
         # index pages generation
         ix = 0
-        for p in self.__pager.pages:
+        iterator = self.__pager.pages
+        if self.__show_progress_bar:
+            iterator = tqdm(iterable=iterator, desc="Generating index pages")
+        for p in iterator:
             pagename = "index{:04d}.html".format(ix)
             if pages == 1:
                 pagename = 'index.html'
@@ -789,7 +801,7 @@ class CodeDiffer:
 if __name__ == '__main__':
     def warn_overwrite(pathname):
         """
-        Warnning for overwriting, return True if answered yes, False if no
+        Warning for overwriting, return True if answered yes, False if no
         """
         while True:
             sys.stderr.write("`{}' exists, are you sure you want to overwrite it (yes/no)? ".format(pathname))
@@ -869,6 +881,13 @@ if __name__ == '__main__':
         dest='include_binary',
         default=False,
         help="also process binary (non-text) files (they are ignored by default)"
+    )
+    parser.add_option(
+        '--progress',
+        action='store_true',
+        dest='show_progress_bar',
+        default=False,
+        help="Show a progress bar when possible."
     )
     parser.add_option(
         '-P',
@@ -977,7 +996,8 @@ if __name__ == '__main__':
             show_common_files=False,
             include_binary_files=opts.include_binary,
             dir_ignore_list=opts.ignore_dirs,
-            file_ignore_list=opts.ignore_files
+            file_ignore_list=opts.ignore_files,
+            show_progress_bar=opts.show_progress_bar,
         )
         differ.make_diff()
     except CodeDifferError as e:
