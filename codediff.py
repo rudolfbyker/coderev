@@ -37,23 +37,6 @@ import magic
 
 _self_name = 'codediff'
 
-_global_dir_ignore_list = (
-    r'^CVS$',
-    r'^SCCS$',
-    r'^\.svn$',
-    r'^\.repo$',
-    r'^\.git$',
-)
-
-_global_file_ignore_list = (
-    r'.*\.o$',
-    r'.*\.swp$',
-    r'.*\.bak$',
-    r'.*\.old$',
-    r'.*~$',
-    r'^\.cvsignore$',
-)
-
 
 def make_title(pathname, width):
     """
@@ -489,9 +472,28 @@ class CodeDiffer:
 
     ########## templates end ##########
 
-    def __init__(self, obj1, obj2, output, input_list=None, strip_level=0,
-                 wrap_num=0, context_line=3, title='', pager=1000,
-                 comments='', show_common_files=False, include_binary_files=False):
+    def __init__(
+            self,
+            obj1,
+            obj2,
+            output,
+            input_list=None,
+            strip_level=0,
+            wrap_num=0,
+            context_line=3,
+            title='',
+            pager=1000,
+            comments='',
+            show_common_files=False,
+            include_binary_files=False,
+            dir_ignore_list=None,
+            file_ignore_list=None
+    ):
+        if file_ignore_list is None:
+            file_ignore_list = []
+        if dir_ignore_list is None:
+            dir_ignore_list = []
+
         self.__obj1 = obj1
         self.__obj2 = obj2
         self.__output = output
@@ -505,9 +507,8 @@ class CodeDiffer:
         self.__pager = Pager(pager)
         self.__show_common_files = show_common_files
         self.__include_binary_files = include_binary_files
-        # TODO: provide options
-        self.__dir_ignore_list = _global_dir_ignore_list
-        self.__file_ignore_list = _global_file_ignore_list
+        self.__dir_ignore_list = set(dir_ignore_list)
+        self.__file_ignore_list = set(file_ignore_list)
 
     def __diff_file(self):
         """
@@ -524,14 +525,14 @@ class CodeDiffer:
         write_file(self.__output, html)
 
     def __is_ignore_dir(self, directory):
-        for pat in self.__dir_ignore_list:
-            if re.match(pat, directory):
+        for pattern in self.__dir_ignore_list:
+            if re.match(pattern, directory):
                 return True
         return False
 
     def __is_ignore_file(self, file):
-        for pat in self.__file_ignore_list:
-            if re.match(pat, file):
+        for pattern in self.__file_ignore_list:
+            if re.match(pattern, file):
                 return True
         return False
 
@@ -892,6 +893,55 @@ if __name__ == '__main__':
         help='specify maximum number of files listed in index page. if there\'s more, additionnal indexnn.html will '
              'be generated. '
     )
+    parser.add_option(
+        '--ignore-file',
+        dest="ignore_files",
+        action="append",
+        type="str",
+        help="A regular expression matching file names to ignore. May be specified multiple times."
+    )
+    parser.add_option(
+        '--ignore-dir',
+        dest="ignore_dirs",
+        action="append",
+        type="str",
+        help="A regular expression matching directory names to ignore. May be specified multiple times."
+    )
+
+    def append_from_file(option, opt_str, value, parser):
+        # `value` should be a file name.
+        with open(value, mode='r') as f:
+            # Each line of the file should be a regular expression.
+            # Don't strip whitespace from lines, since pattern may start or end with a space.
+            # Use .read().splitlines() because we don't want a newline at the end of each pattern.
+            for pattern in f.read().splitlines():
+                if not len(pattern):
+                    # Skip empty lines.
+                    continue
+
+                # If there is no list, start one. Otherwise append the pattern to the list.
+                values = getattr(parser.values, option.dest, [])
+                if not (values and len(values)):
+                    values = []
+                values.append(pattern)
+                setattr(parser.values, option.dest, values)
+
+    parser.add_option(
+        '--ignore-files-from',
+        dest="ignore_files",
+        action="callback",
+        type="str",
+        callback=append_from_file,
+        help="The name of a file containing regular expressions matching file names to ignore, one per line."
+    )
+    parser.add_option(
+        '--ignore-dirs-from',
+        dest="ignore_dirs",
+        action="callback",
+        type="str",
+        callback=append_from_file,
+        help="The name of a file containing regular expressions matching directory names to ignore, one per line."
+    )
     opts, args = parser.parse_args()
 
     if len(args) != 2:
@@ -939,6 +989,8 @@ if __name__ == '__main__':
             comments=comments,
             show_common_files=False,
             include_binary_files=opts.include_binary,
+            dir_ignore_list=opts.ignore_dirs,
+            file_ignore_list=opts.ignore_files
         )
         differ.make_diff()
     except CodeDifferError as e:
