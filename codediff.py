@@ -62,7 +62,7 @@ def get_lines(file):
     """
     Return content of file (a list, each is a line)
     """
-    with open(file, 'r') as fp:
+    with open(file, 'r', errors='replace') as fp:
         lines = fp.readlines()
     return lines
 
